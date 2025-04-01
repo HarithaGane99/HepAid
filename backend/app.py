@@ -5,13 +5,26 @@ from tensorflow.keras.models import load_model
 from preprocessing import preprocess_segmentation, preprocess_classification
 import cv2
 import base64
+from keras.saving import register_keras_serializable
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 
+@register_keras_serializable()
+def dice_coefficient(y_true, y_pred):
+    y_true_f = tf.keras.backend.flatten(tf.cast(y_true, tf.float32))
+    y_pred_f = tf.keras.backend.flatten(tf.cast(y_pred > 0.5, tf.float32))
+    intersection = tf.reduce_sum(y_true_f * y_pred_f)
+    return (2. * intersection + tf.keras.backend.epsilon()) / (
+        tf.reduce_sum(y_true_f) + tf.reduce_sum(y_pred_f) + tf.keras.backend.epsilon())
+
 # Load models
-seg_model = load_model('models/segmentation_modelF.keras')
-cls_model = load_model('models/classification_modelF.keras')
+seg_model = load_model(
+    'models/segmentation_modelF.keras',
+    custom_objects={'dice_coefficient': dice_coefficient},
+    safe_mode=False
+)
+cls_model = load_model('models/classification_modelF.keras',safe_mode=False)
 
 @app.route('/predict', methods=['POST'])
 def predict():
